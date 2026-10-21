@@ -15,3 +15,11 @@ thumb_part1.jpg
 backup/
 personal_tv_setup/
 .DS_Store
+
+# Never commit Android app signing keys
+*.jks
+*.keystore
+*.p12
+*.pkcs12
+*.b64
+signing/

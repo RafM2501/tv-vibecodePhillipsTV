@@ -2,10 +2,14 @@ plugins {
     id 'com.android.application'
 }
 
+def signingKeyFile = System.getenv('PHILIPS_KEYSTORE_PATH')
+def signingPassword = System.getenv('PHILIPS_SIGNING_PASSWORD')
+def hasStableSigning = signingKeyFile != null && !signingKeyFile.isEmpty()
+        && signingPassword != null && !signingPassword.isEmpty()
+
 android {
     namespace 'be.philips.cleanhome'
     compileSdk 34
-
     defaultConfig {
         applicationId 'be.philips.cleanhome'
         minSdk 26
@@ -13,11 +17,25 @@ android {
         versionCode 5
         versionName '0.5.0'
     }
-
-    buildTypes {
-        release { minifyEnabled false }
+    signingConfigs {
+        stable {
+            if (hasStableSigning) {
+                storeFile file(signingKeyFile)
+                storeType 'pkcs12'
+                storePassword signingPassword
+                keyAlias 'philips-clean-home'
+                keyPassword signingPassword
+            }
+        }
     }
-
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (hasStableSigning) {
+                signingConfig signingConfigs.stable
+            }
+        }
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

@@ -21,46 +21,55 @@ Twee rijen van vier tegels, D-padbediening, klok, Instellingen en app-iconen
 uit de geïnstalleerde apps. Geen reclame, aanbevelingen, HDMI-switching,
 telemetrie, tracking, boot receivers of Accessibility-service.
 
-## APK bouwen via GitHub Actions
+## Permanente APK-ondertekening (eenmalig)
 
-1. Open **Actions** in deze GitHub-repository. Schakel Actions voor de fork in als
-   GitHub daarom vraagt.
-2. Kies **Philips Clean Home APK** en open de nieuwste run.
-3. Is de run niet automatisch gestart? Klik op **Run workflow** en selecteer
-   de branch **philips-clean-home**.
-4. Na een geslaagde build: download onder **Artifacts** het ZIP-bestand
-   **philips-clean-home-debug-apk**.
-5. Pak het ZIP-bestand uit. Je vindt daarin **app-debug.apk**.
+Eerdere debug builds kregen op iedere GitHub runner een andere handtekening.
+Nu publiceert de workflow alleen een APK wanneer de permanente,
+PERSOONLIJKE ondertekeningssleutel veilig via GitHub Actions Secrets aanwezig is.
 
-Alternatief: op een pc met Java 17 en Android SDK Platform 34:
-\`\`\`powershell
-cd launcher
-.\gradlew.bat assembleDebug
-\`\`\`
+1. Installeer JDK 17 op je Windows-pc zodat het keytool-commando werkt.
+2. Download philips/setup-signing.ps1 en voer dat script uit in PowerShell.
+3. Kies je eigen keystorewachtwoord. De sleutel wordt lokaal opgeslagen in
+   %USERPROFILE%\PhilipsCleanHomeSigning\philips-clean-home.p12 .
+4. De Base64-keystore staat op je klembord. Maak via
+   https://github.com/RafM2501/tv-vibecodePhillipsTV/settings/secrets/actions
+   de Actions repository secret PHILIPS_KEYSTORE_BASE64 aan en plak de inhoud.
+5. Maak een tweede repository secret PHILIPS_SIGNING_PASSWORD en vul het
+   wachtwoord in dat je lokaal bij keytool koos.
+6. Bewaar bestand en wachtwoord op een veilige plek buiten GitHub en wis het klembord.
+   Zonder deze sleutel zijn updates van dezelfde app niet mogelijk.
+7. Actions > Philips Clean Home APK > Run workflow > philips-clean-home.
+   Na succes bevat de artifact philips-clean-home-STABLE-signed-apk
+   het bestand app-release.apk.
 
-## Veilig testen op je Philips
+Zolang de secrets ontbreken, controleert de CI alleen of het project bouwt.
+Er verschijnt dan GEEN downloadbare APK. Er wordt nooit opnieuw een tijdelijke
+handtekening gebruikt voor een gepubliceerde release.
 
-Zorg dat ADB via je eigen netwerk is verbonden. Gebruik op Windows PowerShell:
+## Eenmalige overgang van de bestaande debug-versie
 
-\`\`\`powershell
-.\adb.exe devices
-.\adb.exe install -r "C:\pad\naar\app-debug.apk"
-.\adb.exe shell am start -n be.philips.cleanhome/.MainActivity
-\`\`\`
+LET OP: de originele Google TV-launcher is momenteel op je televisie
+uitgeschakeld. Schakel die EERST via ADB weer in om een veilige Home-fallback
+te houden, VOOR het verwijderen van de bestaande Clean Home APK.
 
-Deze stappen installeren en openen alleen een gewone app. Ze veranderen
-**niet** de standaard Home-app en schakelen geen systeemcomponenten uit.
+Volg in deze volgorde op je Windows-pc (in de platform-tools map):
 
-Test alle acht tegels, de afstandsbediening, Instellingen, Stremio en Ambilight.
-Als iets niet werkt, herstel je uitsluitend onze testapp:
+    .\adb.exe shell pm enable --user 0 com.google.android.tvlauncher
+    .\adb.exe shell cmd package set-home-activity --user 0 com.google.android.tvlauncher/.MainActivity
+    .\adb.exe uninstall be.philips.cleanhome
+    .\adb.exe install .\app-release.apk
+    .\adb.exe shell am start -n be.philips.cleanhome/.MainActivity
 
-\`\`\`powershell
-.\adb.exe uninstall be.philips.cleanhome
-\`\`\`
+Controleer dat de nieuwe launcher werkt. Pas daarna:
 
-**Nog niet uitvoeren:** \`pm disable-user\` op de originele launcher,
-\`cmd package set-home-activity\`, scripts uit de upstream-repo of
-wijzigingen aan Accessibility-services. Eerst de APK op de TV testen.
+    .\adb.exe shell cmd package set-home-activity --user 0 be.philips.cleanhome/.MainActivity
+    .\adb.exe shell pm disable-user --user 0 com.google.android.tvlauncher
+
+Voortaan worden updates met dezelfde handtekening simpel:
+
+    .\adb.exe install -r .\app-release.apk
+
+Verhoog bij een nieuwe versie steeds versionCode in launcher/app/build.gradle.
 
 ## Herkomst
 
