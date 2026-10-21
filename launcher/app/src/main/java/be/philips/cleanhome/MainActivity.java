@@ -70,7 +70,8 @@ public final class MainActivity extends Activity {
     private TextView subtitle;
     private TextView allAppsButton;
     private boolean showingAllApps = false;
-    // 0 = regular installed apps, 1 = preinstalled/system packages, 2 = all packages.
+    // 0 = Play Store apps, 1 = other user-installed apps, 2 = selected preinstalled consumer apps.
+// Never put system services or infrastructure in the app drawer.
     private int appFilter = 0;
     private LinearLayout filterBar;
     private TextView[] filterButtons;
@@ -167,7 +168,7 @@ public final class MainActivity extends Activity {
         filterBar.setOrientation(LinearLayout.HORIZONTAL);
         filterBar.setGravity(Gravity.CENTER);
         filterButtons = new TextView[3];
-        String[] categories = {"Apps", "Systeemapps", "Alles"};
+        String[] categories = {"Apps", "Andere apps", "Vooraf geïnstalleerd"};
         for (int i = 0; i < categories.length; i++) {
             final int category = i;
             filterButtons[i] = addHeaderButton(filterBar, categories[i],
@@ -254,43 +255,91 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * Unlike a normal TV launcher, this page includes installed apps without a
-     * LEANBACK_LAUNCHER intent. Such packages may only support App-info.
+     * The "Apps" tab intentionally contains only removable, user-facing apps
+     * installed via Google Play. Sideloaded/other installer apps go in a
+     * separate removable tab, and a small curated list of optional preloads
+     * remains read-only. Philips/Android services are not listed anywhere.
      */
     private void showAllApps() {
         setDrawerMode(true);
         headline.setText("Alle apps");
-        subtitle.setText("OK = openen / app-info  ·  OK ingedrukt = beheren");
+        subtitle.setText(appFilter == 2
+                ? "Vooraf geïnstalleerd · alleen app-info"
+                : "OK = openen  ·  OK lang = verwijderen of app-info");
         subtitle.setVisibility(View.VISIBLE);
         allAppsButton.setText("Favorieten");
 
         PackageManager pm = getPackageManager();
-        List<Favorite> normal = new ArrayList<>();
-        List<Favorite> system = new ArrayList<>();
-        // MATCH_DISABLED_COMPONENTS lets us include disabled applications.
-        for (ApplicationInfo info : pm.getInstalledApplications(PackageManager.MATCH_DISABLED_COMPONENTS)) {
-            if (getPackageName().equals(info.packageName)) continue;
+        List<Favorite> playStore = new ArrayList<>();
+        List<Favorite> others = new ArrayList<>();
+        List<Favorite> preinstalled = new ArrayList<>();
+
+        for (ApplicationInfo info : pm.getInstalledApplications(0)) {
+            String pkg = info.packageName;
+            if (getPackageName().equals(pkg) || !info.enabled) continue;
+            // Critical guard: NEVER show headless components / background services.
+            if (launchIntent(pm, pkg) == null) continue;
+
+            String name;
             CharSequence displayName = pm.getApplicationLabel(info);
-            String name = (displayName == null || displayName.length() == 0)
-                    ? info.packageName : displayName.toString();
-            if (!info.enabled) name += " (uitgeschakeld)";
-            Favorite favorite = new Favorite(name, info.packageName);
-            if (isSystem(info)) system.add(favorite);
-            else normal.add(favorite);
+            name = (displayName == null || displayName.length() == 0)
+                    ? pkg : displayName.toString();
+            Favorite app = new Favorite(name, pkg);
+
+            if (isSystem(info)) {
+                // Vendor/Android system components are hidden even in the
+                // 'preinstalled' tab. Show only known optional consumer apps.
+                if (isOptionalPreinstall(pkg)) preinstalled.add(app);
+            } else if (isOptionalPreinstall(pkg) && !isFromPlayStore(pm, pkg)) {
+                // Manufacturer-supplied consumer APKs can live in /data/app.
+                preinstalled.add(app);
+            } else if (isFromPlayStore(pm, pkg)) {
+                playStore.add(app);
+            } else {
+                // User-facing sideloaded/other apps. Never mix them into Apps.
+                others.add(app);
+            }
         }
-        java.util.Comparator<Favorite> comparator =
-                (a, b) -> a.name.compareToIgnoreCase(b.name);
-        Collections.sort(normal, comparator);
-        Collections.sort(system, comparator);
 
-        filterButtons[0].setText("Apps (" + normal.size() + ")");
-        filterButtons[1].setText("Systeemapps (" + system.size() + ")");
-        filterButtons[2].setText("Alles (" + (normal.size() + system.size()) + ")");
+        java.util.Comparator<Favorite> byName =
+                (first, second) -> first.name.compareToIgnoreCase(second.name);
+        Collections.sort(playStore, byName);
+        Collections.sort(others, byName);
+        Collections.sort(preinstalled, byName);
 
-        List<Favorite> shown = new ArrayList<>();
-        if (appFilter != 1) shown.addAll(normal);
-        if (appFilter != 0) shown.addAll(system);
-        renderTiles(shown);
+        filterButtons[0].setText("Apps (" + playStore.size() + ")");
+        filterButtons[1].setText("Andere apps (" + others.size() + ")");
+        filterButtons[2].setText("Vooraf geïnstalleerd (" + preinstalled.size() + ")");
+
+        if (appFilter == 0) renderTiles(playStore);
+        else if (appFilter == 1) renderTiles(others);
+        else renderTiles(preinstalled);
+    }
+
+    private boolean isFromPlayStore(PackageManager pm, String pkg) {
+        try {
+            return "com.android.vending".equals(pm.getInstallerPackageName(pkg));
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+    }
+
+    // Allowlist of visible OPTIONAL consumer apps known from this Philips TV
+    // model's original package inventory. Never include vendor services.
+    private boolean isOptionalPreinstall(String pkg) {
+        switch (pkg) {
+            case "com.google.android.youtube.tvmusic":
+            case "com.google.android.videos":
+            case "com.google.android.play.games":
+            case "org.droidtv.android.fitness":
+            case "org.droidtv.nettvapp4546":
+            case "org.droidtv.nettvapp5512":
+            case "org.droidtv.nettvapp20004410":
+            case "com.boosteroidtv.streaming":
+                return true;
+            default:
+                return false;
+        }
     }
 
     private boolean isSystem(ApplicationInfo info) {
@@ -481,7 +530,8 @@ public final class MainActivity extends Activity {
         }
         try {
             ApplicationInfo info = pm.getApplicationInfo(pkg, PackageManager.MATCH_DISABLED_COMPONENTS);
-            boolean system = isSystem(info);
+            boolean system = isSystem(info)
+                    || (showingAllApps && appFilter == 2 && isOptionalPreinstall(pkg));
             boolean launchable = canLaunch(pm, favorite);
             String[] items;
             if (system) {
@@ -497,8 +547,9 @@ public final class MainActivity extends Activity {
             new AlertDialog.Builder(this)
                     .setTitle(favorite.name)
                     .setMessage(system
-                            ? "Dit is een systeemapp. Verwijderen kan de televisie beschadigen. "
-                              + "Via App-info kun je kijken of Philips een veilige uitschakeloptie aanbiedt."
+                            ? "Deze app is vooraf geïnstalleerd of een systeemapp. "
+                              + "Je kunt hier alleen App-info openen. "
+                              + "We verwijderen geen Philips-systeemonderdelen vanuit de launcher."
                             : "Kies wat je met deze geïnstalleerde app wilt doen.")
                     .setItems(items, (dialog, option) -> {
                         String action = items[option];
@@ -525,7 +576,8 @@ public final class MainActivity extends Activity {
     private void requestUninstall(String pkg) {
         try {
             ApplicationInfo info = getPackageManager().getApplicationInfo(pkg, 0);
-            if (isSystem(info)) {
+            if (isSystem(info) || !info.enabled || launchIntent(getPackageManager(), pkg) == null
+                    || getPackageName().equals(pkg)) {
                 openAppInfo(pkg);
                 return;
             }
