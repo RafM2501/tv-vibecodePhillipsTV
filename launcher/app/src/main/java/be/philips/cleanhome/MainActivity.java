@@ -378,8 +378,8 @@ public final class MainActivity extends Activity {
         });
         tile.setOnClickListener(v -> {
             if (showingAllApps && !canLaunch(pm, favorite)) {
-                String pkg = resolvePackage(pm, favorite);
-                if (pkg != null) openAppInfo(pkg);
+                String selectedPackage = resolvePackage(pm, favorite);
+                if (selectedPackage != null) openAppInfo(selectedPackage);
             } else {
                 openApp(favorite);
             }
