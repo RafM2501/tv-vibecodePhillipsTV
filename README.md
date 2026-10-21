@@ -89,4 +89,10 @@ ongewijzigde oorspronkelijke code.
 Deze versie verwijdert of schakelt nooit rechtstreeks Philips- of Android-
 infrastructuur uit. De originele launcher blijft beschikbaar.
 
-Versie 0.5.0 — Android-app werkt alleen voor zover op de TV getest.
+## Optimalisatie v0.5.1
+- Bij terugkeren vanuit een app worden bestaande tegels, iconen en de focus hergebruikt.
+- Opnieuw laden gebeurt bij de eerste start, bij het wisselen tussen Favorieten en Alle apps en na installatie, verwijdering of wijziging van apps.
+- Geen visuele of functionele uitbreiding; het startscherm en de acht favorieten blijven gelijk.
+- De huidige v0.5.0 op de TV blijft ongewijzigd totdat v0.5.1 bewust wordt geïnstalleerd.
+
+Versie 0.5.1 — Nieuwe APK nog niet op de TV getest.

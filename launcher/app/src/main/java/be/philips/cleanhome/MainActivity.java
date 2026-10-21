@@ -3,7 +3,10 @@ package be.philips.cleanhome;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -68,6 +71,17 @@ public final class MainActivity extends Activity {
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("EEEE d MMMM", LOCALE);
 
     private boolean drawerOpen;
+    // Reuse the current tile views and icons when returning from another app.
+    // A package change invalidates them, so install/uninstall stays in sync.
+    private boolean tilesReady;
+    private boolean resumed;
+    private final BroadcastReceiver packageReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            tilesReady = false;
+            if (resumed) refreshTiles();
+        }
+    };
+
     private TextView homeTitle;
     private TextView drawerButton;
     private TextView time;
@@ -90,23 +104,37 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         buildScreen();
+        IntentFilter packages = new IntentFilter();
+        packages.addAction(Intent.ACTION_PACKAGE_ADDED);
+        packages.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        packages.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        packages.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        packages.addDataScheme("package");
+        registerReceiver(packageReceiver, packages);
     }
 
     @Override public void onResume() {
         super.onResume();
-        if (drawerOpen) showAllApps(); else showFavorites();
+        resumed = true;
+        if (!tilesReady) refreshTiles();
         handler.removeCallbacks(clockTick);
         clockTick.run();
     }
 
     @Override public void onPause() {
+        resumed = false;
         handler.removeCallbacks(clockTick);
         super.onPause();
     }
 
     @Override public void onDestroy() {
+        unregisterReceiver(packageReceiver);
         handler.removeCallbacks(clockTick);
         super.onDestroy();
+    }
+
+    private void refreshTiles() {
+        if (drawerOpen) showAllApps(); else showFavorites();
     }
 
     @Override public void onBackPressed() {
@@ -227,6 +255,7 @@ public final class MainActivity extends Activity {
     private void showFavorites() {
         setMode(false);
         render(Arrays.asList(FAVORITES), false);
+        tilesReady = true;
     }
 
     private void showAllApps() {
@@ -243,6 +272,7 @@ public final class MainActivity extends Activity {
         }
         Collections.sort(apps, (a, b) -> a.name.compareToIgnoreCase(b.name));
         render(apps, true);
+        tilesReady = true;
     }
 
     /** Only real TV apps; never vendor services, launchers, power/input/DRM services. */
