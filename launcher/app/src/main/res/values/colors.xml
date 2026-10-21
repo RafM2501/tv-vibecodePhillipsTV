@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- NLRC brand blue -->
-    <color name="nlrc_blue">#FF2979FF</color>
-    <color name="nlrc_blue_dim">#662979FF</color>
-    <color name="nlrc_blue_glow">#332979FF</color>
-    <color name="glass_rim">#CC99BBFF</color>
-</resources>

@@ -1,150 +1,72 @@
-# tv-vibehack 📺✨
+# Philips Clean Home
 
-> **Transform any ad-bloated Android TV or Google TV into a lightning-fast, tvOS-inspired, fail-safe experience — without root, without bootloop risks, and without losing access to stock features.**
+Eigen lichte Android TV-launcher voor de Philips **55PUS8897/12**
+(Android TV 11, MediaTek MT5895, platform PH1M_EA_9970A).
 
-[![Android 14 Ready](https://img.shields.io/badge/Android-14%20(API%2034)-green.svg)](https://developer.android.com/about/versions/14)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Root Required: No](https://img.shields.io/badge/Root-Not%20Required-brightgreen.svg)](#)
-[![Zero Bootloop Architecture](https://img.shields.io/badge/Architecture-100%25%20Fail--Safe-orange.svg)](#the-100-fail-safe-architecture)
+Deze code staat op de branch **philips-clean-home**. De originele
+main-branch en de standaard Philips Android TV-launcher blijven onaangeroerd.
 
----
+## Jouw acht apps
 
-## 📐 Architecture & Transformation Overview
+1. TV Vlaanderen — nl.streamgroup.vlaanderen
+2. Prime Video — com.amazon.amazonvideo.livingroom
+3. GoPlay — be.goplay.app.tv (fallback: be.goplay.app)
+4. VTM GO — be.vmma.vtm.zenderapp
+5. VRT MAX — be.vrt.vrtnu
+6. DAZN — com.dazn
+7. IBO Pro Player — com.ibopro.player
+8. Stremio — com.stremio.one
 
-```text
-[ STOCK GOOGLE TV ]                             [ NLRC TV VIBEHACK ]
-┌──────────────────────────────────────┐        ┌──────────────────────────────────────┐
-│  Sponsored Ad Banner (70% Screen)    │        │  NLRC Home · Ambient Clock & Date    │
-│  [Trending Shows] [Paid Promotions]  │        │                                      │
-│  50+ Bloatware OTT Apps              │   ➔    │                                      │
-│  Remote Buttons Lock You In Paywalls │        │  Dock: [HDMI 2 (Cable)] [Media Vault]│
-└──────────────────────────────────────┘        └──────────────────────────────────────┘
-   • 2.5 GB RAM used                               • 120 MB RAM used
-   • Heavy telemetry & tracking                    • 0 Ads · 0 Telemetry · 100% Fail-Safe
-```
+Twee rijen van vier tegels, D-padbediening, klok, Instellingen en app-iconen
+uit de geïnstalleerde apps. Geen reclame, aanbevelingen, HDMI-switching,
+telemetrie, tracking, boot receivers of Accessibility-service.
 
----
+## APK bouwen via GitHub Actions
 
-## 🎯 The Motivation
+1. Open **Actions** in deze GitHub-repository. Schakel Actions voor de fork in als
+   GitHub daarom vraagt.
+2. Kies **Philips Clean Home APK** en open de nieuwste run.
+3. Is de run niet automatisch gestart? Klik op **Run workflow** en selecteer
+   de branch **philips-clean-home**.
+4. Na een geslaagde build: download onder **Artifacts** het ZIP-bestand
+   **philips-clean-home-debug-apk**.
+5. Pak het ZIP-bestand uit. Je vindt daarin **app-debug.apk**.
 
-Modern Smart TVs ship with:
-- **Sponsored ads covering 70% of the screen**.
-- **Sluggish bloatware** and 50+ pre-installed background apps consuming memory and tracking habits.
-- **Unremappable sponsored remote buttons** (Netflix, Prime Video) that elderly family members hit by mistake, throwing them into subscription walls.
-- **Overly complicated navigation** that makes switching to Cable/HDMI or playing personal home videos a headache.
-
-**tv-vibehack** solves this permanently. Originally built to give aging parents a distraction-free, one-touch TV experience, it provides a universal blueprint for taking back control of any Android TV without root.
-
----
-
-## ⚡ What Makes This Different?
-
-### 1. 🛡️ The 100% Fail-Safe Architecture (Zero Bootloops)
-On Android 14 Google TV, disabling the stock launcher (`com.google.android.apps.tv.launcherx`) breaks Direct Boot, tripping Android's `RescueParty` service and bricking the TV into a black-screen recovery state.
-
-**tv-vibehack never disables `launcherx`.** Instead:
-- The custom launcher is **`directBootAware="true"`**.
-- A lightweight native **Accessibility Service** (`HomeKeyService`) intercepts Home key events and window transitions in under 10ms.
-- If the custom launcher is ever uninstalled or crashes, Google TV seamlessly takes over. **Zero chance of bricking your TV.**
-
-### 2. 🔀 Hardware Passthrough (Direct HDMI Switching)
-No more opening 4 nested TV menus just to watch cable. Through reverse-engineered Realtek RTD `TvContract` passthrough URIs, the launcher switches directly to HDMI inputs programmatically:
-```java
-Uri uri = TvContract.buildChannelUriForPassthroughInput(
-    "com.realtek.tv.passthrough/.hdmiinput.HDMITvInputService/HW151519744" // HDMI 2
-);
-context.startActivity(new Intent(Intent.ACTION_VIEW, uri));
-```
-
-### 3. 🎮 Sponsored Remote Key Remapping (No Root)
-`HomeKeyService` intercepts hardcoded hardware remote buttons (`KEYCODE_BUTTON_3` for Netflix, `KEYCODE_BUTTON_4` for Prime Video, `KEYCODE_PROG_RED`/`GREEN`) and redirects them straight to HDMI 2 / Set-Top Box in <150ms without root.
-
-### 4. 🎞️ Offline TV Media Vault & Legacy Transcoding
-Many families have legacy home videos or recordings stored on USB drives encoded in older formats (e.g., DVD MPEG-2) that native modern Smart TV chipsets cannot decode inside standard MP4 containers.
-
-#### How to Add Your Own Media:
-1. **Transcode to Hardware-Accelerated H.264:**
-   ```bash
-   ffmpeg -i "MyVideo_Part_1.mp4" -c:v libx264 -preset faster -crf 23 -c:a aac -b:a 192k "Part_1.mp4"
-   ```
-2. **Push Directly into TV Internal Storage:**
-   ```bash
-   adb shell mkdir -p /sdcard/Movies/NLRC
-   adb push Part_1.mp4 /sdcard/Movies/NLRC/Part_1.mp4
-   adb push Part_2.mp4 /sdcard/Movies/NLRC/Part_2.mp4
-   adb push Part_3.mp4 /sdcard/Movies/NLRC/Part_3.mp4
-   ```
-3. **Instant D-pad Remote Navigation:**
-   Launch **PenDrive / Media Viewer** directly from the dock. No USB stick needs to remain plugged in; videos play natively at 60fps with intuitive remote controls:
-   - ◄ / ►: Seek -10s / +10s with real-time HUD.
-   - ▲ / ▼ or CH+ / CH-: Switch to Next / Previous part.
-   - OK: Play / Pause toggle.
-
----
-
-## 🚀 Quick Start
-
-### 1. Enable ADB on your Android TV
-1. On the TV: **Settings** → **System** → **About** → Click **Build** 7 times to enable Developer Options.
-2. Go to **Settings** → **System** → **Developer Options** → Turn on **USB Debugging** (and Network Debugging if available).
-3. Connect your computer to the same Wi-Fi network as the TV.
-
-### 2. Connect via ADB
-```bash
-adb connect <TV_IP_ADDRESS>:5555
-```
-Accept the *"Always allow from this computer"* dialog on your TV.
-
-### 3. Safe Debloat
-Safely disable ad-trackers and bloatware using model-specific profiles:
-```bash
-# Example for Acer / Realtek QLED Android 14 TVs
-adb shell pm disable-user --user 0 com.google.android.tvrecommendations
-```
-*(See [`examples/`](examples/) for model-specific profiles).*
-
-### 4. Build & Install the Launcher
-```bash
+Alternatief: op een pc met Java 17 en Android SDK Platform 34:
+\`\`\`powershell
 cd launcher
-./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
+.\gradlew.bat assembleDebug
+\`\`\`
 
-### 5. Enable the Accessibility Interceptor
-```bash
-adb shell settings put secure enabled_accessibility_services com.gathin.tvhome/.HomeKeyService
-adb shell settings put secure accessibility_enabled 1
-```
+## Veilig testen op je Philips
 
----
+Zorg dat ADB via je eigen netwerk is verbonden. Gebruik op Windows PowerShell:
 
-## 📁 Repository Structure
+\`\`\`powershell
+.\adb.exe devices
+.\adb.exe install -r "C:\pad\naar\app-debug.apk"
+.\adb.exe shell am start -n be.philips.cleanhome/.MainActivity
+\`\`\`
 
-| Path | Description |
-|---|---|
-| [`launcher/`](launcher/) | Native Android TV launcher with Apple tvOS aesthetics, D-pad navigation, ambient glow, and Direct Boot awareness. |
-| [`launcher/.../HomeKeyService.java`](launcher/app/src/main/java/com/gathin/tvhome/HomeKeyService.java) | Fail-safe Accessibility Service intercepting Home button and sponsored hotkeys. |
-| [`launcher/.../HdmiHelper.java`](launcher/app/src/main/java/com/gathin/tvhome/HdmiHelper.java) | Direct Realtek / Android TV hardware passthrough input launcher. |
-| [`launcher/.../PenDriveActivity.java`](launcher/app/src/main/java/com/gathin/tvhome/PenDriveActivity.java) | Media viewer card UI for offline TV storage / USB playback. |
-| [`launcher/.../VideoPlayerActivity.java`](launcher/app/src/main/java/com/gathin/tvhome/VideoPlayerActivity.java) | Hardware-accelerated full-screen player with remote seek HUD and episode switching. |
-| [`examples/acer-v-pro-32-qled/`](examples/acer-v-pro-32-qled/) | Comprehensive teardown and architecture notes for Acer / MOKA Realtek RTD QLED TVs. |
-| [`tools/`](tools/) | Helper scripts: `safe_switch.bat` / `safe_switch.sh` for one-click toggle between stock and custom launcher. |
+Deze stappen installeren en openen alleen een gewone app. Ze veranderen
+**niet** de standaard Home-app en schakelen geen systeemcomponenten uit.
 
----
+Test alle acht tegels, de afstandsbediening, Instellingen, Stremio en Ambilight.
+Als iets niet werkt, herstel je uitsluitend onze testapp:
 
-## 📖 Deep Dive Hardware Case Studies
-- [Acer V Pro 32" QLED (Android 14 API 34, Realtek RTD, MOKA R3G)](examples/acer-v-pro-32-qled/README.md)
-- [Xiaomi Mi TV 4A (PatchWall Debloat)](examples/xiaomi-mi-tv-4a/README.md)
+\`\`\`powershell
+.\adb.exe uninstall be.philips.cleanhome
+\`\`\`
 
----
+**Nog niet uitvoeren:** \`pm disable-user\` op de originele launcher,
+\`cmd package set-home-activity\`, scripts uit de upstream-repo of
+wijzigingen aan Accessibility-services. Eerst de APK op de TV testen.
 
-## 🤝 Contributing
-Contributions are warmly welcomed! If you've reverse-engineered input IDs or debloat profiles for your specific TV brand (TCL, Sony Bravia, Hisense, OnePlus, Nvidia Shield), please submit a pull request under [`examples/`](examples/).
+## Herkomst
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+Eigen herimplementatie in de MIT-licensed fork van
+[ToomRamcharan/tv-vibehack](https://github.com/ToomRamcharan/tv-vibehack).
+De upstream MIT-LICENSE is behouden. Op de originele main-branch staat de
+ongewijzigde oorspronkelijke code.
 
----
-
-## 📄 License
-This project is licensed under the [MIT License](LICENSE).
-Outfit typeface licensed under SIL Open Font License.
+Status: versie 0.1.0; de bron is nog niet op de echte TV getest.
