@@ -1,10 +1,13 @@
 package be.philips.cleanhome;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -20,12 +23,16 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Locale;
 
 /**
@@ -58,6 +65,11 @@ public final class MainActivity extends Activity {
     private TextView clock;
     private TextView date;
     private LinearLayout grid;
+    private ScrollView viewport;
+    private TextView headline;
+    private TextView subtitle;
+    private TextView allAppsButton;
+    private boolean showingAllApps = false;
 
     private final Runnable updateClock = new Runnable() {
         @Override public void run() {
@@ -77,7 +89,8 @@ public final class MainActivity extends Activity {
 
     @Override public void onResume() {
         super.onResume();
-        showApps();
+        if (showingAllApps) showAllApps();
+        else showApps();
         clockHandler.removeCallbacks(updateClock);
         updateClock.run();
     }
@@ -93,7 +106,11 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        // Do not exit into an empty task when used as HOME.
+        if (showingAllApps) {
+            showingAllApps = false;
+            showApps();
+        }
+        // On HOME do not exit into an empty task.
     }
 
     private void buildUi() {
@@ -119,46 +136,50 @@ public final class MainActivity extends Activity {
         screen.addView(header, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView brand = label("THUIS", 16, WHITE, true);
-        brand.setLetterSpacing(.25f);
-        brand.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(brand, new LinearLayout.LayoutParams(0, dp(45), 1f));
-
-        TextView settings = label("Instellingen", 15, MUTED, false);
-        settings.setGravity(Gravity.CENTER);
-        settings.setPadding(dp(18), dp(9), dp(18), dp(9));
-        settings.setFocusable(true);
-        settings.setClickable(true);
-        settings.setBackground(cardBackground(false, true));
-        settings.setOnFocusChangeListener((v, focused) -> {
-            v.setBackground(cardBackground(focused, true));
-            settings.setTextColor(focused ? WHITE : MUTED);
-            v.animate().scaleX(focused ? 1.04f : 1f)
-                    .scaleY(focused ? 1.04f : 1f).setDuration(100).start();
-        });
-        settings.setOnClickListener(v -> openSettings());
-        header.addView(settings);
+        addHeaderButton(header, "App Store", this::openStore, true);
+        header.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        allAppsButton = addHeaderButton(header, "Alle apps", () -> {
+            showingAllApps = !showingAllApps;
+            if (showingAllApps) showAllApps();
+            else showApps();
+        }, true);
+        addHeaderButton(header, "Instellingen", this::openSettings, false);
 
         screen.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
 
-        TextView headline = label("Wat kijken we vandaag?", 29, WHITE, true);
+        headline = label("Wat kijken we vandaag?", 29, WHITE, true);
         headline.setGravity(Gravity.CENTER);
         screen.addView(headline);
-        TextView sub = label("Jouw apps. Geen afleiding.", 15, MUTED, false);
-        sub.setGravity(Gravity.CENTER);
+        subtitle = label("", 15, MUTED, false);
+        subtitle.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         subParams.topMargin = dp(7);
-        screen.addView(sub, subParams);
+        screen.addView(subtitle, subParams);
+        subtitle.setVisibility(View.GONE);
+
+        viewport = new ScrollView(this);
+        viewport.setFillViewport(false);
+        viewport.setVerticalScrollBarEnabled(false);
+        viewport.setClipChildren(false);
+        viewport.setClipToPadding(false);
+        viewport.setFocusable(false);
 
         grid = new LinearLayout(this);
         grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setGravity(Gravity.CENTER_HORIZONTAL);
         grid.setClipChildren(false);
         grid.setClipToPadding(false);
+        viewport.addView(grid, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        int heightDp = Math.round(dm.heightPixels / dm.density);
+        int viewportDp = Math.max(205, Math.min(330, heightDp - 235));
         LinearLayout.LayoutParams gridParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        gridParams.topMargin = dp(29);
-        screen.addView(grid, gridParams);
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(viewportDp));
+        gridParams.topMargin = dp(24);
+        screen.addView(viewport, gridParams);
 
         screen.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
         clock = label("--:--", 23, WHITE, false);
@@ -169,8 +190,57 @@ public final class MainActivity extends Activity {
         screen.addView(date);
     }
 
+    private TextView addHeaderButton(LinearLayout header, String title,
+                                     Runnable action, boolean rightMargin) {
+        TextView button = label(title, 15, MUTED, false);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(18), dp(9), dp(18), dp(9));
+        button.setFocusable(true);
+        button.setClickable(true);
+        button.setBackground(cardBackground(false, true));
+        button.setOnFocusChangeListener((v, focused) -> {
+            v.setBackground(cardBackground(focused, true));
+            button.setTextColor(focused ? WHITE : MUTED);
+            v.animate().scaleX(focused ? 1.04f : 1f)
+                    .scaleY(focused ? 1.04f : 1f).setDuration(100).start();
+        });
+        button.setOnClickListener(v -> action.run());
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        if (rightMargin) params.rightMargin = dp(12);
+        header.addView(button, params);
+        return button;
+    }
+
     private void showApps() {
+        headline.setText("Wat kijken we vandaag?");
+        subtitle.setVisibility(View.GONE);
+        allAppsButton.setText("Alle apps");
+        renderTiles(Arrays.asList(FAVORITES));
+    }
+
+    private void showAllApps() {
+        headline.setText("Alle apps");
+        subtitle.setText("OK: openen  ·  OK ingedrukt houden: verwijderen of app-info");
+        subtitle.setVisibility(View.VISIBLE);
+        allAppsButton.setText("Favorieten");
+
+        PackageManager pm = getPackageManager();
+        List<Favorite> installed = new ArrayList<>();
+        for (ApplicationInfo info : pm.getInstalledApplications(0)) {
+            if (getPackageName().equals(info.packageName)) continue;
+            if (launchIntent(pm, info.packageName) == null) continue;
+            CharSequence name = pm.getApplicationLabel(info);
+            installed.add(new Favorite(name == null ? info.packageName : name.toString(),
+                    info.packageName));
+        }
+        Collections.sort(installed, (a, b) -> a.name.compareToIgnoreCase(b.name));
+        renderTiles(installed);
+    }
+
+    private void renderTiles(List<Favorite> apps) {
         grid.removeAllViews();
+        viewport.scrollTo(0, 0);
         PackageManager pm = getPackageManager();
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int widthDp = Math.round(dm.widthPixels / dm.density);
@@ -178,19 +248,22 @@ public final class MainActivity extends Activity {
         int tileHeight = Math.max(116, Math.min(138, Math.round(tileWidth * .69f)));
 
         View first = null;
-        for (int rowNo = 0; rowNo < 2; rowNo++) {
+        int rows = (apps.size() + 3) / 4;
+        for (int rowNo = 0; rowNo < rows; rowNo++) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setClipChildren(false);
             row.setClipToPadding(false);
             grid.addView(row);
             for (int column = 0; column < 4; column++) {
-                Favorite favorite = FAVORITES[rowNo * 4 + column];
+                int index = rowNo * 4 + column;
+                if (index >= apps.size()) break;
+                Favorite favorite = apps.get(index);
                 View tile = makeTile(pm, favorite);
                 LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                         dp(tileWidth), dp(tileHeight));
                 if (column < 3) p.rightMargin = dp(14);
-                if (rowNo == 0) p.bottomMargin = dp(14);
+                if (rowNo < rows - 1) p.bottomMargin = dp(14);
                 row.addView(tile, p);
                 if (first == null) first = tile;
             }
@@ -244,6 +317,11 @@ public final class MainActivity extends Activity {
             v.setElevation(focused ? dp(12) : 0);
         });
         tile.setOnClickListener(v -> openApp(favorite));
+        tile.setLongClickable(true);
+        tile.setOnLongClickListener(v -> {
+            showAppActions(favorite);
+            return true;
+        });
         return tile;
     }
 
@@ -296,6 +374,67 @@ public final class MainActivity extends Activity {
         }
         Toast.makeText(this, favorite.name + " kon niet geopend worden.",
                 Toast.LENGTH_LONG).show();
+    }
+
+    private void openStore() {
+        PackageManager pm = getPackageManager();
+        Intent store = launchIntent(pm, "com.android.vending");
+        if (store == null) {
+            store = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("market://search?q=apps"));
+            store.setPackage("com.android.vending");
+        }
+        try {
+            store.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(store);
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Toast.makeText(this, "De Play Store kon niet geopend worden.",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showAppActions(Favorite favorite) {
+        String pkg = resolvePackage(getPackageManager(), favorite);
+        if (pkg == null) {
+            Toast.makeText(this, "App niet gevonden.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final String selectedPkg = pkg;
+        new AlertDialog.Builder(this)
+                .setTitle(favorite.name)
+                .setItems(new String[]{"Openen", "Verwijderen", "App-info", "Annuleren"},
+                        (dialog, option) -> {
+                            if (option == 0) openApp(favorite);
+                            else if (option == 1) requestUninstall(selectedPkg);
+                            else if (option == 2) openAppInfo(selectedPkg);
+                        }).show();
+    }
+
+    private void requestUninstall(String pkg) {
+        try {
+            ApplicationInfo info = getPackageManager().getApplicationInfo(pkg, 0);
+            if ((info.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
+                Toast.makeText(this, "Systeemapp: gebruik App-info om deze eventueel uit te schakelen.",
+                        Toast.LENGTH_LONG).show();
+                openAppInfo(pkg);
+                return;
+            }
+            Intent intent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg));
+            startActivity(intent); // Android asks for confirmation. Never uninstall silently.
+        } catch (PackageManager.NameNotFoundException
+                 | ActivityNotFoundException | SecurityException e) {
+            openAppInfo(pkg);
+        }
+    }
+
+    private void openAppInfo(String pkg) {
+        try {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + pkg)));
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Toast.makeText(this, "App-instellingen niet beschikbaar.",
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void openSettings() {
