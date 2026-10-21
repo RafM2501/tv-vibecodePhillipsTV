@@ -69,26 +69,24 @@ Eigen herimplementatie in de MIT-licensed fork van
 De upstream MIT-LICENSE is behouden. Op de originele main-branch staat de
 ongewijzigde oorspronkelijke code.
 
-## Alle apps beheren (v0.4)
-- **Apps**: uitsluitend gewone, rechtstreeks startbare gebruikersapps waarvan
-  Android aangeeft dat ze via Google Play (`com.android.vending`) zijn geïnstalleerd.
-  Elke app in dit overzicht heeft een bevestigde **Verwijderen**-optie.
-- **Andere apps**: rechtstreeks startbare gebruikersapps die via een andere bron
-  zijn geïnstalleerd (bijvoorbeeld APK/sideload). Ook deze kunnen via het
-  Android-systeem worden verwijderd, met expliciete bevestiging.
-- **Vooraf geïnstalleerd**: uitsluitend een kleine lijst bekende, optionele
-  consumentenapps (bijvoorbeeld YouTube Music). Alleen **App-info**;
-  geen verwijderen of uitschakelen vanuit onze launcher.
-- **Philips-systeemservices, Android-infrastructuur en achtergrondpakketten**:
-  verschijnen niet in het appoverzicht, ook niet onder de andere tabs.
-- Lang op **OK** drukken op een app voor het beheermenu. De gebruiker moet
-  verwijderen expliciet bevestigen in Android. Sommige apps zijn beschermd
-  door apparaatbeleid of door de fabrikant: Android kan het verzoek weigeren.
+## De launcher v0.5
+- Warm, rustig en huiselijk ontworpen Android TV-startscherm.
+- Acht favoriete apps op het Home-scherm.
+- **App Store** linksboven; **Alle apps** en **Instellingen** rechtsboven.
+- **Alle apps** toont een enkele lijst van alle rechtstreeks startbare,
+  herkenbare TV-apps: Play Store, APK en optionele voorgeïnstalleerde apps.
+  Geen categorieën of uitlegteksten, geen technische systeemservices.
+- Iedere apptegel in **Alle apps** heeft zichtbaar de actie **Verwijderen**
+  voor gewone apps of **App-info** voor systeemapps.
+- Gewone apps worden via de Android-systeemdialoog verwijderd (bevestiging
+  vereist); als de dialoog niet bestaat, wordt Android App-info geopend.
+- Systeemapps kunnen niet stilzwijgend worden verwijderd door een normale
+  Android-app. Voor optionele bloatware is de aparte, omkeerbare ADB-tool
+  `philips/optional-system-apps.ps1` beschikbaar.
+- Houd OK lang ingedrukt om het app-menu te tonen; de zichtbare actie onder
+  een tegel werkt ook zonder lang indrukken.
 
-Opgelet: de installatiemetadata zijn niet altijd volledig. Een Play Store-app
-zonder herkenbare installatiesource kan onder **Andere apps** verschijnen.
-Voor vooraf geïnstalleerde bloatware is er het afzonderlijke, omkeerbare
-PowerShell-script `philips/optional-system-apps.ps1` en herstel via ADB.
-De app verwijdert geen kernonderdelen van de Philips TV.
+Deze versie verwijdert of schakelt nooit rechtstreeks Philips- of Android-
+infrastructuur uit. De originele launcher blijft beschikbaar.
 
-Status: versie 0.4.0. APK-build en functietests op de echte TV nog te verifiëren.
+Versie 0.5.0 — Android-app werkt alleen voor zover op de TV getest.
