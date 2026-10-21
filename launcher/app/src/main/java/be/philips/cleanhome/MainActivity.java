@@ -70,6 +70,11 @@ public final class MainActivity extends Activity {
     private TextView subtitle;
     private TextView allAppsButton;
     private boolean showingAllApps = false;
+    // 0 = regular installed apps, 1 = preinstalled/system packages, 2 = all packages.
+    private int appFilter = 0;
+    private LinearLayout filterBar;
+    private TextView[] filterButtons;
+    private int normalViewportDp;
 
     private final Runnable updateClock = new Runnable() {
         @Override public void run() {
@@ -158,6 +163,22 @@ public final class MainActivity extends Activity {
         screen.addView(subtitle, subParams);
         subtitle.setVisibility(View.GONE);
 
+        filterBar = new LinearLayout(this);
+        filterBar.setOrientation(LinearLayout.HORIZONTAL);
+        filterBar.setGravity(Gravity.CENTER);
+        filterButtons = new TextView[3];
+        String[] categories = {"Apps", "Systeemapps", "Alles"};
+        for (int i = 0; i < categories.length; i++) {
+            final int category = i;
+            filterButtons[i] = addHeaderButton(filterBar, categories[i],
+                    () -> { appFilter = category; showAllApps(); }, true);
+        }
+        LinearLayout.LayoutParams filterParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        filterParams.topMargin = dp(10);
+        screen.addView(filterBar, filterParams);
+        filterBar.setVisibility(View.GONE);
+
         viewport = new ScrollView(this);
         viewport.setFillViewport(false);
         viewport.setVerticalScrollBarEnabled(false);
@@ -175,9 +196,9 @@ public final class MainActivity extends Activity {
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int heightDp = Math.round(dm.heightPixels / dm.density);
-        int viewportDp = Math.max(205, Math.min(330, heightDp - 235));
+        normalViewportDp = Math.max(185, Math.min(330, heightDp - 235));
         LinearLayout.LayoutParams gridParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(viewportDp));
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(normalViewportDp));
         gridParams.topMargin = dp(24);
         screen.addView(viewport, gridParams);
 
@@ -212,30 +233,69 @@ public final class MainActivity extends Activity {
         return button;
     }
 
+    private void setDrawerMode(boolean enabled) {
+        filterBar.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        ViewGroup.LayoutParams p = viewport.getLayoutParams();
+        p.height = dp(enabled ? Math.max(150, normalViewportDp - 50) : normalViewportDp);
+        viewport.setLayoutParams(p);
+        for (int i = 0; i < filterButtons.length; i++) {
+            boolean selected = enabled && i == appFilter;
+            filterButtons[i].setTextColor(selected ? WHITE : MUTED);
+            filterButtons[i].setBackground(cardBackground(selected, true));
+        }
+    }
+
     private void showApps() {
+        setDrawerMode(false);
         headline.setText("Wat kijken we vandaag?");
         subtitle.setVisibility(View.GONE);
         allAppsButton.setText("Alle apps");
         renderTiles(Arrays.asList(FAVORITES));
     }
 
+    /**
+     * Unlike a normal TV launcher, this page includes installed apps without a
+     * LEANBACK_LAUNCHER intent. Such packages may only support App-info.
+     */
     private void showAllApps() {
+        setDrawerMode(true);
         headline.setText("Alle apps");
-        subtitle.setText("OK: openen  ·  OK ingedrukt houden: verwijderen of app-info");
+        subtitle.setText("OK = openen / app-info  ·  OK ingedrukt = beheren");
         subtitle.setVisibility(View.VISIBLE);
         allAppsButton.setText("Favorieten");
 
         PackageManager pm = getPackageManager();
-        List<Favorite> installed = new ArrayList<>();
-        for (ApplicationInfo info : pm.getInstalledApplications(0)) {
+        List<Favorite> normal = new ArrayList<>();
+        List<Favorite> system = new ArrayList<>();
+        // MATCH_DISABLED_COMPONENTS lets us include disabled applications.
+        for (ApplicationInfo info : pm.getInstalledApplications(PackageManager.MATCH_DISABLED_COMPONENTS)) {
             if (getPackageName().equals(info.packageName)) continue;
-            if (launchIntent(pm, info.packageName) == null) continue;
-            CharSequence name = pm.getApplicationLabel(info);
-            installed.add(new Favorite(name == null ? info.packageName : name.toString(),
-                    info.packageName));
+            CharSequence displayName = pm.getApplicationLabel(info);
+            String name = (displayName == null || displayName.length() == 0)
+                    ? info.packageName : displayName.toString();
+            if (!info.enabled) name += " (uitgeschakeld)";
+            Favorite favorite = new Favorite(name, info.packageName);
+            if (isSystem(info)) system.add(favorite);
+            else normal.add(favorite);
         }
-        Collections.sort(installed, (a, b) -> a.name.compareToIgnoreCase(b.name));
-        renderTiles(installed);
+        java.util.Comparator<Favorite> comparator =
+                (a, b) -> a.name.compareToIgnoreCase(b.name);
+        Collections.sort(normal, comparator);
+        Collections.sort(system, comparator);
+
+        filterButtons[0].setText("Apps (" + normal.size() + ")");
+        filterButtons[1].setText("Systeemapps (" + system.size() + ")");
+        filterButtons[2].setText("Alles (" + (normal.size() + system.size()) + ")");
+
+        List<Favorite> shown = new ArrayList<>();
+        if (appFilter != 1) shown.addAll(normal);
+        if (appFilter != 0) shown.addAll(system);
+        renderTiles(shown);
+    }
+
+    private boolean isSystem(ApplicationInfo info) {
+        return (info.flags & (ApplicationInfo.FLAG_SYSTEM
+                | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0;
     }
 
     private void renderTiles(List<Favorite> apps) {
@@ -316,7 +376,14 @@ public final class MainActivity extends Activity {
                     .setDuration(110).start();
             v.setElevation(focused ? dp(12) : 0);
         });
-        tile.setOnClickListener(v -> openApp(favorite));
+        tile.setOnClickListener(v -> {
+            if (showingAllApps && !canLaunch(pm, favorite)) {
+                String pkg = resolvePackage(pm, favorite);
+                if (pkg != null) openAppInfo(pkg);
+            } else {
+                openApp(favorite);
+            }
+        });
         tile.setLongClickable(true);
         tile.setOnLongClickListener(v -> {
             showAppActions(favorite);
@@ -335,9 +402,21 @@ public final class MainActivity extends Activity {
 
     private String resolvePackage(PackageManager pm, Favorite favorite) {
         for (String pkg : favorite.packages) {
-            if (launchIntent(pm, pkg) != null) return pkg;
+            try {
+                pm.getApplicationInfo(pkg, PackageManager.MATCH_DISABLED_COMPONENTS);
+                return pkg;
+            } catch (PackageManager.NameNotFoundException ignored) {
+                // GoPlay's alternate TV package may not be installed.
+            }
         }
         return null;
+    }
+
+    private boolean canLaunch(PackageManager pm, Favorite favorite) {
+        for (String pkg : favorite.packages) {
+            if (launchIntent(pm, pkg) != null) return true;
+        }
+        return false;
     }
 
     private Intent launchIntent(PackageManager pm, String pkg) {
@@ -394,35 +473,72 @@ public final class MainActivity extends Activity {
     }
 
     private void showAppActions(Favorite favorite) {
-        String pkg = resolvePackage(getPackageManager(), favorite);
+        PackageManager pm = getPackageManager();
+        String pkg = resolvePackage(pm, favorite);
         if (pkg == null) {
             Toast.makeText(this, "App niet gevonden.", Toast.LENGTH_SHORT).show();
             return;
         }
-        final String selectedPkg = pkg;
+        try {
+            ApplicationInfo info = pm.getApplicationInfo(pkg, PackageManager.MATCH_DISABLED_COMPONENTS);
+            boolean system = isSystem(info);
+            boolean launchable = canLaunch(pm, favorite);
+            String[] items;
+            if (system) {
+                items = launchable
+                        ? new String[]{"Openen", "App-info / eventueel uitschakelen", "Annuleren"}
+                        : new String[]{"App-info / eventueel uitschakelen", "Annuleren"};
+            } else {
+                items = launchable
+                        ? new String[]{"Openen", "Verwijderen", "App-info", "Annuleren"}
+                        : new String[]{"Verwijderen", "App-info", "Annuleren"};
+            }
+            String selectedPackage = pkg;
+            new AlertDialog.Builder(this)
+                    .setTitle(favorite.name)
+                    .setMessage(system
+                            ? "Dit is een systeemapp. Verwijderen kan de televisie beschadigen. "
+                              + "Via App-info kun je kijken of Philips een veilige uitschakeloptie aanbiedt."
+                            : "Kies wat je met deze geïnstalleerde app wilt doen.")
+                    .setItems(items, (dialog, option) -> {
+                        String action = items[option];
+                        if (action.equals("Openen")) openApp(favorite);
+                        else if (action.equals("Verwijderen")) confirmUninstall(selectedPackage, favorite.name);
+                        else if (action.startsWith("App-info")) openAppInfo(selectedPackage);
+                    })
+                    .show();
+        } catch (PackageManager.NameNotFoundException e) {
+            Toast.makeText(this, "App niet meer geïnstalleerd.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void confirmUninstall(String pkg, String name) {
         new AlertDialog.Builder(this)
-                .setTitle(favorite.name)
-                .setItems(new String[]{"Openen", "Verwijderen", "App-info", "Annuleren"},
-                        (dialog, option) -> {
-                            if (option == 0) openApp(favorite);
-                            else if (option == 1) requestUninstall(selectedPkg);
-                            else if (option == 2) openAppInfo(selectedPkg);
-                        }).show();
+                .setTitle(name + " verwijderen?")
+                .setMessage("Android vraagt vervolgens nog om bevestiging. "
+                        + "Gegevens van deze app kunnen verloren gaan.")
+                .setNegativeButton("Annuleren", null)
+                .setPositiveButton("Verder", (dialog, which) -> requestUninstall(pkg))
+                .show();
     }
 
     private void requestUninstall(String pkg) {
         try {
             ApplicationInfo info = getPackageManager().getApplicationInfo(pkg, 0);
-            if ((info.flags & ApplicationInfo.FLAG_SYSTEM) != 0) {
-                Toast.makeText(this, "Systeemapp: gebruik App-info om deze eventueel uit te schakelen.",
-                        Toast.LENGTH_LONG).show();
+            if (isSystem(info)) {
                 openAppInfo(pkg);
                 return;
             }
-            Intent intent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg));
-            startActivity(intent); // Android asks for confirmation. Never uninstall silently.
-        } catch (PackageManager.NameNotFoundException
-                 | ActivityNotFoundException | SecurityException e) {
+            // ACTION_UNINSTALL_PACKAGE requires REQUEST_DELETE_PACKAGES on Android 9+.
+            Intent uninstall = new Intent(Intent.ACTION_UNINSTALL_PACKAGE,
+                    Uri.parse("package:" + pkg));
+            startActivity(uninstall);
+        } catch (PackageManager.NameNotFoundException e) {
+            Toast.makeText(this, "Deze app is al verwijderd.", Toast.LENGTH_LONG).show();
+            if (showingAllApps) showAllApps();
+        } catch (ActivityNotFoundException | SecurityException e) {
+            Toast.makeText(this, "Android kon het verwijdervenster niet openen. "
+                    + "Probeer verwijderen via App-info.", Toast.LENGTH_LONG).show();
             openAppInfo(pkg);
         }
     }

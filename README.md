@@ -69,4 +69,19 @@ Eigen herimplementatie in de MIT-licensed fork van
 De upstream MIT-LICENSE is behouden. Op de originele main-branch staat de
 ongewijzigde oorspronkelijke code.
 
-Status: versie 0.1.0; de bron is nog niet op de echte TV getest.
+## Alle apps beheren (v0.3)
+- Open **Alle apps** en schakel tussen **Apps**, **Systeemapps** en **Alles**.
+- Ook geïnstalleerde pakketten zonder Home/Leanback-startactiviteit verschijnen.
+- **OK** opent een app; bij apps zonder startactiviteit opent **App-info**.
+- **OK lang indrukken** opent het beheermenu.
+- Voor normaal geïnstalleerde apps start **Verwijderen** de systeemdialoog;
+  Android vraagt altijd expliciete bevestiging.
+- Systeemapps worden nooit via deze launcher verwijderd; gebruik
+  **App-info** alleen als je begrijpt welke TV-functies nodig zijn.
+
+LET OP: Android TV kan geen verwijderverzoek uitvoeren voor bepaalde
+pakkettypen. Philips-firmware kan systeemfuncties beschermen. Onze launcher
+schakelt geen systeempakketten uit en verwijdert niets zonder bevestiging.
+
+Status: versie 0.3.0; installatie en verwijderen moeten nog op de echte TV
+worden getest.

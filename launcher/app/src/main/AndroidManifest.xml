@@ -2,7 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
-    <!-- Android 11+ package visibility for the eight app shortcuts. -->
+    <!-- This sideloaded TV launcher is an app manager: the user requested all packages. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Android 9+ requires this for the system's uninstall confirmation dialog. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Exact package visibility for favorite shortcuts on Android 11+. -->
     <queries>
         <package android:name="nl.streamgroup.vlaanderen" />
         <package android:name="com.amazon.amazonvideo.livingroom" />
